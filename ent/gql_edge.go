@@ -8,12 +8,25 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 )
 
-func (t *Todo) Children(ctx context.Context) ([]*Todo, error) {
-	result, err := t.NamedChildren(graphql.GetFieldContext(ctx).Field.Alias)
-	if IsNotLoaded(err) {
-		result, err = t.QueryChildren().All(ctx)
+func (t *Todo) Children(
+	ctx context.Context, after *Cursor, first *int, before *Cursor, last *int, orderBy *TodoOrder, where *TodoWhereInput,
+) (*TodoConnection, error) {
+	opts := []TodoPaginateOption{
+		WithTodoOrder(orderBy),
+		WithTodoFilter(where.Filter),
 	}
-	return result, err
+	alias := graphql.GetFieldContext(ctx).Field.Alias
+	totalCount, hasTotalCount := t.Edges.totalCount[0][alias]
+	if nodes, err := t.NamedChildren(alias); err == nil || hasTotalCount {
+		pager, err := newTodoPager(opts, last != nil)
+		if err != nil {
+			return nil, err
+		}
+		conn := &TodoConnection{Edges: []*TodoEdge{}, TotalCount: totalCount}
+		conn.build(nodes, pager, after, first, before, last)
+		return conn, nil
+	}
+	return t.QueryChildren().Paginate(ctx, after, first, before, last, opts...)
 }
 
 func (t *Todo) Parent(ctx context.Context) (*Todo, error) {
@@ -22,4 +35,62 @@ func (t *Todo) Parent(ctx context.Context) (*Todo, error) {
 		result, err = t.QueryParent().Only(ctx)
 	}
 	return result, MaskNotFound(err)
+}
+
+func (t *Todo) Owner(ctx context.Context) (*User, error) {
+	result, err := t.Edges.OwnerOrErr()
+	if IsNotLoaded(err) {
+		result, err = t.QueryOwner().Only(ctx)
+	}
+	return result, MaskNotFound(err)
+}
+
+func (u *User) Todos(
+	ctx context.Context, after *Cursor, first *int, before *Cursor, last *int, orderBy *TodoOrder, where *TodoWhereInput,
+) (*TodoConnection, error) {
+	opts := []TodoPaginateOption{
+		WithTodoOrder(orderBy),
+		WithTodoFilter(where.Filter),
+	}
+	alias := graphql.GetFieldContext(ctx).Field.Alias
+	totalCount, hasTotalCount := u.Edges.totalCount[0][alias]
+	if nodes, err := u.NamedTodos(alias); err == nil || hasTotalCount {
+		pager, err := newTodoPager(opts, last != nil)
+		if err != nil {
+			return nil, err
+		}
+		conn := &TodoConnection{Edges: []*TodoEdge{}, TotalCount: totalCount}
+		conn.build(nodes, pager, after, first, before, last)
+		return conn, nil
+	}
+	return u.QueryTodos().Paginate(ctx, after, first, before, last, opts...)
+}
+
+func (u *User) Manager(ctx context.Context) (*User, error) {
+	result, err := u.Edges.ManagerOrErr()
+	if IsNotLoaded(err) {
+		result, err = u.QueryManager().Only(ctx)
+	}
+	return result, MaskNotFound(err)
+}
+
+func (u *User) Subordinates(
+	ctx context.Context, after *Cursor, first *int, before *Cursor, last *int, orderBy *UserOrder, where *UserWhereInput,
+) (*UserConnection, error) {
+	opts := []UserPaginateOption{
+		WithUserOrder(orderBy),
+		WithUserFilter(where.Filter),
+	}
+	alias := graphql.GetFieldContext(ctx).Field.Alias
+	totalCount, hasTotalCount := u.Edges.totalCount[2][alias]
+	if nodes, err := u.NamedSubordinates(alias); err == nil || hasTotalCount {
+		pager, err := newUserPager(opts, last != nil)
+		if err != nil {
+			return nil, err
+		}
+		conn := &UserConnection{Edges: []*UserEdge{}, TotalCount: totalCount}
+		conn.build(nodes, pager, after, first, before, last)
+		return conn, nil
+	}
+	return u.QuerySubordinates().Paginate(ctx, after, first, before, last, opts...)
 }

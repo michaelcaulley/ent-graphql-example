@@ -44,6 +44,8 @@ func (Todo) Fields() []ent.Field {
 			Annotations(
 				entgql.OrderField("PRIORITY"),
 			),
+		field.Int("owner_id").
+			Optional(),
 	}
 }
 
@@ -52,7 +54,12 @@ func (Todo) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("parent", Todo.Type).
 			Unique().
-			From("children"),
+			From("children").
+			Annotations(entgql.RelayConnection()),
+		edge.From("owner", User.Type).
+			Ref("todos").
+			Unique().
+			Field("owner_id"),
 	}
 }
 

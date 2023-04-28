@@ -7,6 +7,9 @@ import (
 	"io"
 	"strconv"
 	"time"
+
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -22,10 +25,14 @@ const (
 	FieldStatus = "status"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
+	// FieldOwnerID holds the string denoting the owner_id field in the database.
+	FieldOwnerID = "owner_id"
 	// EdgeChildren holds the string denoting the children edge name in mutations.
 	EdgeChildren = "children"
 	// EdgeParent holds the string denoting the parent edge name in mutations.
 	EdgeParent = "parent"
+	// EdgeOwner holds the string denoting the owner edge name in mutations.
+	EdgeOwner = "owner"
 	// Table holds the table name of the todo in the database.
 	Table = "todos"
 	// ChildrenTable is the table that holds the children relation/edge.
@@ -36,6 +43,13 @@ const (
 	ParentTable = "todos"
 	// ParentColumn is the table column denoting the parent relation/edge.
 	ParentColumn = "todo_parent"
+	// OwnerTable is the table that holds the owner relation/edge.
+	OwnerTable = "todos"
+	// OwnerInverseTable is the table name for the User entity.
+	// It exists in this package in order to avoid circular dependency with the "user" package.
+	OwnerInverseTable = "users"
+	// OwnerColumn is the table column denoting the owner relation/edge.
+	OwnerColumn = "owner_id"
 )
 
 // Columns holds all SQL columns for todo fields.
@@ -45,6 +59,7 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldStatus,
 	FieldPriority,
+	FieldOwnerID,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "todos"
@@ -101,6 +116,88 @@ func StatusValidator(s Status) error {
 	default:
 		return fmt.Errorf("todo: invalid enum value for status field: %q", s)
 	}
+}
+
+// OrderOption defines the ordering options for the Todo queries.
+type OrderOption func(*sql.Selector)
+
+// ByID orders the results by the id field.
+func ByID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByText orders the results by the text field.
+func ByText(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldText, opts...).ToFunc()
+}
+
+// ByCreatedAt orders the results by the created_at field.
+func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByStatus orders the results by the status field.
+func ByStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByPriority orders the results by the priority field.
+func ByPriority(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriority, opts...).ToFunc()
+}
+
+// ByOwnerID orders the results by the owner_id field.
+func ByOwnerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOwnerID, opts...).ToFunc()
+}
+
+// ByChildrenCount orders the results by children count.
+func ByChildrenCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newChildrenStep(), opts...)
+	}
+}
+
+// ByChildren orders the results by children terms.
+func ByChildren(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newChildrenStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByParentField orders the results by parent field.
+func ByParentField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newParentStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByOwnerField orders the results by owner field.
+func ByOwnerField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOwnerStep(), sql.OrderByField(field, opts...))
+	}
+}
+func newChildrenStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, true, ChildrenTable, ChildrenColumn),
+	)
+}
+func newParentStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, ParentTable, ParentColumn),
+	)
+}
+func newOwnerStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OwnerInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, OwnerTable, OwnerColumn),
+	)
 }
 
 // MarshalGQL implements graphql.Marshaler interface.

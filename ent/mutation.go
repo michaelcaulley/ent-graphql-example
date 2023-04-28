@@ -10,8 +10,10 @@ import (
 	"time"
 	"todo/ent/predicate"
 	"todo/ent/todo"
+	"todo/ent/user"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/sql"
 )
 
 const (
@@ -24,6 +26,7 @@ const (
 
 	// Node types.
 	TypeTodo = "Todo"
+	TypeUser = "User"
 )
 
 // TodoMutation represents an operation that mutates the Todo nodes in the graph.
@@ -43,6 +46,8 @@ type TodoMutation struct {
 	clearedchildren bool
 	parent          *int
 	clearedparent   bool
+	owner           *int
+	clearedowner    bool
 	done            bool
 	oldValue        func(context.Context) (*Todo, error)
 	predicates      []predicate.Todo
@@ -310,6 +315,55 @@ func (m *TodoMutation) ResetPriority() {
 	m.addpriority = nil
 }
 
+// SetOwnerID sets the "owner_id" field.
+func (m *TodoMutation) SetOwnerID(i int) {
+	m.owner = &i
+}
+
+// OwnerID returns the value of the "owner_id" field in the mutation.
+func (m *TodoMutation) OwnerID() (r int, exists bool) {
+	v := m.owner
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnerID returns the old "owner_id" field's value of the Todo entity.
+// If the Todo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TodoMutation) OldOwnerID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnerID: %w", err)
+	}
+	return oldValue.OwnerID, nil
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (m *TodoMutation) ClearOwnerID() {
+	m.owner = nil
+	m.clearedFields[todo.FieldOwnerID] = struct{}{}
+}
+
+// OwnerIDCleared returns if the "owner_id" field was cleared in this mutation.
+func (m *TodoMutation) OwnerIDCleared() bool {
+	_, ok := m.clearedFields[todo.FieldOwnerID]
+	return ok
+}
+
+// ResetOwnerID resets all changes to the "owner_id" field.
+func (m *TodoMutation) ResetOwnerID() {
+	m.owner = nil
+	delete(m.clearedFields, todo.FieldOwnerID)
+}
+
 // AddChildIDs adds the "children" edge to the Todo entity by ids.
 func (m *TodoMutation) AddChildIDs(ids ...int) {
 	if m.children == nil {
@@ -403,14 +457,55 @@ func (m *TodoMutation) ResetParent() {
 	m.clearedparent = false
 }
 
+// ClearOwner clears the "owner" edge to the User entity.
+func (m *TodoMutation) ClearOwner() {
+	m.clearedowner = true
+}
+
+// OwnerCleared reports if the "owner" edge to the User entity was cleared.
+func (m *TodoMutation) OwnerCleared() bool {
+	return m.OwnerIDCleared() || m.clearedowner
+}
+
+// OwnerIDs returns the "owner" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// OwnerID instead. It exists only for internal usage by the builders.
+func (m *TodoMutation) OwnerIDs() (ids []int) {
+	if id := m.owner; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetOwner resets all changes to the "owner" edge.
+func (m *TodoMutation) ResetOwner() {
+	m.owner = nil
+	m.clearedowner = false
+}
+
 // Where appends a list predicates to the TodoMutation builder.
 func (m *TodoMutation) Where(ps ...predicate.Todo) {
 	m.predicates = append(m.predicates, ps...)
 }
 
+// WhereP appends storage-level predicates to the TodoMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TodoMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Todo, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
 // Op returns the operation name.
 func (m *TodoMutation) Op() Op {
 	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TodoMutation) SetOp(op Op) {
+	m.op = op
 }
 
 // Type returns the node type of this mutation (Todo).
@@ -422,7 +517,7 @@ func (m *TodoMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TodoMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.text != nil {
 		fields = append(fields, todo.FieldText)
 	}
@@ -434,6 +529,9 @@ func (m *TodoMutation) Fields() []string {
 	}
 	if m.priority != nil {
 		fields = append(fields, todo.FieldPriority)
+	}
+	if m.owner != nil {
+		fields = append(fields, todo.FieldOwnerID)
 	}
 	return fields
 }
@@ -451,6 +549,8 @@ func (m *TodoMutation) Field(name string) (ent.Value, bool) {
 		return m.Status()
 	case todo.FieldPriority:
 		return m.Priority()
+	case todo.FieldOwnerID:
+		return m.OwnerID()
 	}
 	return nil, false
 }
@@ -468,6 +568,8 @@ func (m *TodoMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldStatus(ctx)
 	case todo.FieldPriority:
 		return m.OldPriority(ctx)
+	case todo.FieldOwnerID:
+		return m.OldOwnerID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Todo field %s", name)
 }
@@ -504,6 +606,13 @@ func (m *TodoMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPriority(v)
+		return nil
+	case todo.FieldOwnerID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnerID(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Todo field %s", name)
@@ -549,7 +658,11 @@ func (m *TodoMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *TodoMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(todo.FieldOwnerID) {
+		fields = append(fields, todo.FieldOwnerID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -562,6 +675,11 @@ func (m *TodoMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *TodoMutation) ClearField(name string) error {
+	switch name {
+	case todo.FieldOwnerID:
+		m.ClearOwnerID()
+		return nil
+	}
 	return fmt.Errorf("unknown Todo nullable field %s", name)
 }
 
@@ -581,18 +699,24 @@ func (m *TodoMutation) ResetField(name string) error {
 	case todo.FieldPriority:
 		m.ResetPriority()
 		return nil
+	case todo.FieldOwnerID:
+		m.ResetOwnerID()
+		return nil
 	}
 	return fmt.Errorf("unknown Todo field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *TodoMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.children != nil {
 		edges = append(edges, todo.EdgeChildren)
 	}
 	if m.parent != nil {
 		edges = append(edges, todo.EdgeParent)
+	}
+	if m.owner != nil {
+		edges = append(edges, todo.EdgeOwner)
 	}
 	return edges
 }
@@ -611,13 +735,17 @@ func (m *TodoMutation) AddedIDs(name string) []ent.Value {
 		if id := m.parent; id != nil {
 			return []ent.Value{*id}
 		}
+	case todo.EdgeOwner:
+		if id := m.owner; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *TodoMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedchildren != nil {
 		edges = append(edges, todo.EdgeChildren)
 	}
@@ -640,12 +768,15 @@ func (m *TodoMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *TodoMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedchildren {
 		edges = append(edges, todo.EdgeChildren)
 	}
 	if m.clearedparent {
 		edges = append(edges, todo.EdgeParent)
+	}
+	if m.clearedowner {
+		edges = append(edges, todo.EdgeOwner)
 	}
 	return edges
 }
@@ -658,6 +789,8 @@ func (m *TodoMutation) EdgeCleared(name string) bool {
 		return m.clearedchildren
 	case todo.EdgeParent:
 		return m.clearedparent
+	case todo.EdgeOwner:
+		return m.clearedowner
 	}
 	return false
 }
@@ -668,6 +801,9 @@ func (m *TodoMutation) ClearEdge(name string) error {
 	switch name {
 	case todo.EdgeParent:
 		m.ClearParent()
+		return nil
+	case todo.EdgeOwner:
+		m.ClearOwner()
 		return nil
 	}
 	return fmt.Errorf("unknown Todo unique edge %s", name)
@@ -683,6 +819,635 @@ func (m *TodoMutation) ResetEdge(name string) error {
 	case todo.EdgeParent:
 		m.ResetParent()
 		return nil
+	case todo.EdgeOwner:
+		m.ResetOwner()
+		return nil
 	}
 	return fmt.Errorf("unknown Todo edge %s", name)
+}
+
+// UserMutation represents an operation that mutates the User nodes in the graph.
+type UserMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *int
+	name                *string
+	clearedFields       map[string]struct{}
+	todos               map[int]struct{}
+	removedtodos        map[int]struct{}
+	clearedtodos        bool
+	manager             *int
+	clearedmanager      bool
+	subordinates        map[int]struct{}
+	removedsubordinates map[int]struct{}
+	clearedsubordinates bool
+	done                bool
+	oldValue            func(context.Context) (*User, error)
+	predicates          []predicate.User
+}
+
+var _ ent.Mutation = (*UserMutation)(nil)
+
+// userOption allows management of the mutation configuration using functional options.
+type userOption func(*UserMutation)
+
+// newUserMutation creates new mutation for the User entity.
+func newUserMutation(c config, op Op, opts ...userOption) *UserMutation {
+	m := &UserMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeUser,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withUserID sets the ID field of the mutation.
+func withUserID(id int) userOption {
+	return func(m *UserMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *User
+		)
+		m.oldValue = func(ctx context.Context) (*User, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().User.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withUser sets the old User of the mutation.
+func withUser(node *User) userOption {
+	return func(m *UserMutation) {
+		m.oldValue = func(context.Context) (*User, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m UserMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m UserMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *UserMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *UserMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().User.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetName sets the "name" field.
+func (m *UserMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *UserMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *UserMutation) ResetName() {
+	m.name = nil
+}
+
+// SetManagerID sets the "manager_id" field.
+func (m *UserMutation) SetManagerID(i int) {
+	m.manager = &i
+}
+
+// ManagerID returns the value of the "manager_id" field in the mutation.
+func (m *UserMutation) ManagerID() (r int, exists bool) {
+	v := m.manager
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldManagerID returns the old "manager_id" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldManagerID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldManagerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldManagerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldManagerID: %w", err)
+	}
+	return oldValue.ManagerID, nil
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (m *UserMutation) ClearManagerID() {
+	m.manager = nil
+	m.clearedFields[user.FieldManagerID] = struct{}{}
+}
+
+// ManagerIDCleared returns if the "manager_id" field was cleared in this mutation.
+func (m *UserMutation) ManagerIDCleared() bool {
+	_, ok := m.clearedFields[user.FieldManagerID]
+	return ok
+}
+
+// ResetManagerID resets all changes to the "manager_id" field.
+func (m *UserMutation) ResetManagerID() {
+	m.manager = nil
+	delete(m.clearedFields, user.FieldManagerID)
+}
+
+// AddTodoIDs adds the "todos" edge to the Todo entity by ids.
+func (m *UserMutation) AddTodoIDs(ids ...int) {
+	if m.todos == nil {
+		m.todos = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.todos[ids[i]] = struct{}{}
+	}
+}
+
+// ClearTodos clears the "todos" edge to the Todo entity.
+func (m *UserMutation) ClearTodos() {
+	m.clearedtodos = true
+}
+
+// TodosCleared reports if the "todos" edge to the Todo entity was cleared.
+func (m *UserMutation) TodosCleared() bool {
+	return m.clearedtodos
+}
+
+// RemoveTodoIDs removes the "todos" edge to the Todo entity by IDs.
+func (m *UserMutation) RemoveTodoIDs(ids ...int) {
+	if m.removedtodos == nil {
+		m.removedtodos = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.todos, ids[i])
+		m.removedtodos[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedTodos returns the removed IDs of the "todos" edge to the Todo entity.
+func (m *UserMutation) RemovedTodosIDs() (ids []int) {
+	for id := range m.removedtodos {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// TodosIDs returns the "todos" edge IDs in the mutation.
+func (m *UserMutation) TodosIDs() (ids []int) {
+	for id := range m.todos {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetTodos resets all changes to the "todos" edge.
+func (m *UserMutation) ResetTodos() {
+	m.todos = nil
+	m.clearedtodos = false
+	m.removedtodos = nil
+}
+
+// ClearManager clears the "manager" edge to the User entity.
+func (m *UserMutation) ClearManager() {
+	m.clearedmanager = true
+}
+
+// ManagerCleared reports if the "manager" edge to the User entity was cleared.
+func (m *UserMutation) ManagerCleared() bool {
+	return m.ManagerIDCleared() || m.clearedmanager
+}
+
+// ManagerIDs returns the "manager" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ManagerID instead. It exists only for internal usage by the builders.
+func (m *UserMutation) ManagerIDs() (ids []int) {
+	if id := m.manager; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetManager resets all changes to the "manager" edge.
+func (m *UserMutation) ResetManager() {
+	m.manager = nil
+	m.clearedmanager = false
+}
+
+// AddSubordinateIDs adds the "subordinates" edge to the User entity by ids.
+func (m *UserMutation) AddSubordinateIDs(ids ...int) {
+	if m.subordinates == nil {
+		m.subordinates = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.subordinates[ids[i]] = struct{}{}
+	}
+}
+
+// ClearSubordinates clears the "subordinates" edge to the User entity.
+func (m *UserMutation) ClearSubordinates() {
+	m.clearedsubordinates = true
+}
+
+// SubordinatesCleared reports if the "subordinates" edge to the User entity was cleared.
+func (m *UserMutation) SubordinatesCleared() bool {
+	return m.clearedsubordinates
+}
+
+// RemoveSubordinateIDs removes the "subordinates" edge to the User entity by IDs.
+func (m *UserMutation) RemoveSubordinateIDs(ids ...int) {
+	if m.removedsubordinates == nil {
+		m.removedsubordinates = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.subordinates, ids[i])
+		m.removedsubordinates[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedSubordinates returns the removed IDs of the "subordinates" edge to the User entity.
+func (m *UserMutation) RemovedSubordinatesIDs() (ids []int) {
+	for id := range m.removedsubordinates {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// SubordinatesIDs returns the "subordinates" edge IDs in the mutation.
+func (m *UserMutation) SubordinatesIDs() (ids []int) {
+	for id := range m.subordinates {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetSubordinates resets all changes to the "subordinates" edge.
+func (m *UserMutation) ResetSubordinates() {
+	m.subordinates = nil
+	m.clearedsubordinates = false
+	m.removedsubordinates = nil
+}
+
+// Where appends a list predicates to the UserMutation builder.
+func (m *UserMutation) Where(ps ...predicate.User) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the UserMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *UserMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.User, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *UserMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *UserMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (User).
+func (m *UserMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *UserMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.name != nil {
+		fields = append(fields, user.FieldName)
+	}
+	if m.manager != nil {
+		fields = append(fields, user.FieldManagerID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *UserMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case user.FieldName:
+		return m.Name()
+	case user.FieldManagerID:
+		return m.ManagerID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case user.FieldName:
+		return m.OldName(ctx)
+	case user.FieldManagerID:
+		return m.OldManagerID(ctx)
+	}
+	return nil, fmt.Errorf("unknown User field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UserMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case user.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case user.FieldManagerID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetManagerID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown User field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *UserMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UserMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown User numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *UserMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(user.FieldManagerID) {
+		fields = append(fields, user.FieldManagerID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *UserMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *UserMutation) ClearField(name string) error {
+	switch name {
+	case user.FieldManagerID:
+		m.ClearManagerID()
+		return nil
+	}
+	return fmt.Errorf("unknown User nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *UserMutation) ResetField(name string) error {
+	switch name {
+	case user.FieldName:
+		m.ResetName()
+		return nil
+	case user.FieldManagerID:
+		m.ResetManagerID()
+		return nil
+	}
+	return fmt.Errorf("unknown User field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *UserMutation) AddedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.todos != nil {
+		edges = append(edges, user.EdgeTodos)
+	}
+	if m.manager != nil {
+		edges = append(edges, user.EdgeManager)
+	}
+	if m.subordinates != nil {
+		edges = append(edges, user.EdgeSubordinates)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *UserMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case user.EdgeTodos:
+		ids := make([]ent.Value, 0, len(m.todos))
+		for id := range m.todos {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeManager:
+		if id := m.manager; id != nil {
+			return []ent.Value{*id}
+		}
+	case user.EdgeSubordinates:
+		ids := make([]ent.Value, 0, len(m.subordinates))
+		for id := range m.subordinates {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *UserMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.removedtodos != nil {
+		edges = append(edges, user.EdgeTodos)
+	}
+	if m.removedsubordinates != nil {
+		edges = append(edges, user.EdgeSubordinates)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *UserMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case user.EdgeTodos:
+		ids := make([]ent.Value, 0, len(m.removedtodos))
+		for id := range m.removedtodos {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeSubordinates:
+		ids := make([]ent.Value, 0, len(m.removedsubordinates))
+		for id := range m.removedsubordinates {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *UserMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.clearedtodos {
+		edges = append(edges, user.EdgeTodos)
+	}
+	if m.clearedmanager {
+		edges = append(edges, user.EdgeManager)
+	}
+	if m.clearedsubordinates {
+		edges = append(edges, user.EdgeSubordinates)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *UserMutation) EdgeCleared(name string) bool {
+	switch name {
+	case user.EdgeTodos:
+		return m.clearedtodos
+	case user.EdgeManager:
+		return m.clearedmanager
+	case user.EdgeSubordinates:
+		return m.clearedsubordinates
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *UserMutation) ClearEdge(name string) error {
+	switch name {
+	case user.EdgeManager:
+		m.ClearManager()
+		return nil
+	}
+	return fmt.Errorf("unknown User unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *UserMutation) ResetEdge(name string) error {
+	switch name {
+	case user.EdgeTodos:
+		m.ResetTodos()
+		return nil
+	case user.EdgeManager:
+		m.ResetManager()
+		return nil
+	case user.EdgeSubordinates:
+		m.ResetSubordinates()
+		return nil
+	}
+	return fmt.Errorf("unknown User edge %s", name)
 }

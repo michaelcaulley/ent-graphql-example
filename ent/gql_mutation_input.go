@@ -15,6 +15,7 @@ type CreateTodoInput struct {
 	Priority  *int
 	ChildIDs  []int
 	ParentID  *int
+	OwnerID   *int
 }
 
 // Mutate applies the CreateTodoInput on the TodoMutation builder.
@@ -35,6 +36,9 @@ func (i *CreateTodoInput) Mutate(m *TodoMutation) {
 	if v := i.ParentID; v != nil {
 		m.SetParentID(*v)
 	}
+	if v := i.OwnerID; v != nil {
+		m.SetOwnerID(*v)
+	}
 }
 
 // SetInput applies the change-set in the CreateTodoInput on the TodoCreate builder.
@@ -48,10 +52,13 @@ type UpdateTodoInput struct {
 	Text           *string
 	Status         *todo.Status
 	Priority       *int
+	ClearChildren  bool
 	AddChildIDs    []int
 	RemoveChildIDs []int
 	ClearParent    bool
 	ParentID       *int
+	ClearOwner     bool
+	OwnerID        *int
 }
 
 // Mutate applies the UpdateTodoInput on the TodoMutation builder.
@@ -65,6 +72,9 @@ func (i *UpdateTodoInput) Mutate(m *TodoMutation) {
 	if v := i.Priority; v != nil {
 		m.SetPriority(*v)
 	}
+	if i.ClearChildren {
+		m.ClearChildren()
+	}
 	if v := i.AddChildIDs; len(v) > 0 {
 		m.AddChildIDs(v...)
 	}
@@ -77,6 +87,12 @@ func (i *UpdateTodoInput) Mutate(m *TodoMutation) {
 	if v := i.ParentID; v != nil {
 		m.SetParentID(*v)
 	}
+	if i.ClearOwner {
+		m.ClearOwner()
+	}
+	if v := i.OwnerID; v != nil {
+		m.SetOwnerID(*v)
+	}
 }
 
 // SetInput applies the change-set in the UpdateTodoInput on the TodoUpdate builder.
@@ -87,6 +103,90 @@ func (c *TodoUpdate) SetInput(i UpdateTodoInput) *TodoUpdate {
 
 // SetInput applies the change-set in the UpdateTodoInput on the TodoUpdateOne builder.
 func (c *TodoUpdateOne) SetInput(i UpdateTodoInput) *TodoUpdateOne {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// CreateUserInput represents a mutation input for creating users.
+type CreateUserInput struct {
+	Name           string
+	TodoIDs        []int
+	ManagerID      *int
+	SubordinateIDs []int
+}
+
+// Mutate applies the CreateUserInput on the UserMutation builder.
+func (i *CreateUserInput) Mutate(m *UserMutation) {
+	m.SetName(i.Name)
+	if v := i.TodoIDs; len(v) > 0 {
+		m.AddTodoIDs(v...)
+	}
+	if v := i.ManagerID; v != nil {
+		m.SetManagerID(*v)
+	}
+	if v := i.SubordinateIDs; len(v) > 0 {
+		m.AddSubordinateIDs(v...)
+	}
+}
+
+// SetInput applies the change-set in the CreateUserInput on the UserCreate builder.
+func (c *UserCreate) SetInput(i CreateUserInput) *UserCreate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// UpdateUserInput represents a mutation input for updating users.
+type UpdateUserInput struct {
+	Name                 *string
+	ClearTodos           bool
+	AddTodoIDs           []int
+	RemoveTodoIDs        []int
+	ClearManager         bool
+	ManagerID            *int
+	ClearSubordinates    bool
+	AddSubordinateIDs    []int
+	RemoveSubordinateIDs []int
+}
+
+// Mutate applies the UpdateUserInput on the UserMutation builder.
+func (i *UpdateUserInput) Mutate(m *UserMutation) {
+	if v := i.Name; v != nil {
+		m.SetName(*v)
+	}
+	if i.ClearTodos {
+		m.ClearTodos()
+	}
+	if v := i.AddTodoIDs; len(v) > 0 {
+		m.AddTodoIDs(v...)
+	}
+	if v := i.RemoveTodoIDs; len(v) > 0 {
+		m.RemoveTodoIDs(v...)
+	}
+	if i.ClearManager {
+		m.ClearManager()
+	}
+	if v := i.ManagerID; v != nil {
+		m.SetManagerID(*v)
+	}
+	if i.ClearSubordinates {
+		m.ClearSubordinates()
+	}
+	if v := i.AddSubordinateIDs; len(v) > 0 {
+		m.AddSubordinateIDs(v...)
+	}
+	if v := i.RemoveSubordinateIDs; len(v) > 0 {
+		m.RemoveSubordinateIDs(v...)
+	}
+}
+
+// SetInput applies the change-set in the UpdateUserInput on the UserUpdate builder.
+func (c *UserUpdate) SetInput(i UpdateUserInput) *UserUpdate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// SetInput applies the change-set in the UpdateUserInput on the UserUpdateOne builder.
+func (c *UserUpdateOne) SetInput(i UpdateUserInput) *UserUpdateOne {
 	i.Mutate(c.Mutation())
 	return c
 }

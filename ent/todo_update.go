@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"todo/ent/predicate"
 	"todo/ent/todo"
+	"todo/ent/user"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -68,6 +69,26 @@ func (tu *TodoUpdate) AddPriority(i int) *TodoUpdate {
 	return tu
 }
 
+// SetOwnerID sets the "owner_id" field.
+func (tu *TodoUpdate) SetOwnerID(i int) *TodoUpdate {
+	tu.mutation.SetOwnerID(i)
+	return tu
+}
+
+// SetNillableOwnerID sets the "owner_id" field if the given value is not nil.
+func (tu *TodoUpdate) SetNillableOwnerID(i *int) *TodoUpdate {
+	if i != nil {
+		tu.SetOwnerID(*i)
+	}
+	return tu
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (tu *TodoUpdate) ClearOwnerID() *TodoUpdate {
+	tu.mutation.ClearOwnerID()
+	return tu
+}
+
 // AddChildIDs adds the "children" edge to the Todo entity by IDs.
 func (tu *TodoUpdate) AddChildIDs(ids ...int) *TodoUpdate {
 	tu.mutation.AddChildIDs(ids...)
@@ -102,6 +123,11 @@ func (tu *TodoUpdate) SetParent(t *Todo) *TodoUpdate {
 	return tu.SetParentID(t.ID)
 }
 
+// SetOwner sets the "owner" edge to the User entity.
+func (tu *TodoUpdate) SetOwner(u *User) *TodoUpdate {
+	return tu.SetOwnerID(u.ID)
+}
+
 // Mutation returns the TodoMutation object of the builder.
 func (tu *TodoUpdate) Mutation() *TodoMutation {
 	return tu.mutation
@@ -134,42 +160,15 @@ func (tu *TodoUpdate) ClearParent() *TodoUpdate {
 	return tu
 }
 
+// ClearOwner clears the "owner" edge to the User entity.
+func (tu *TodoUpdate) ClearOwner() *TodoUpdate {
+	tu.mutation.ClearOwner()
+	return tu
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (tu *TodoUpdate) Save(ctx context.Context) (int, error) {
-	var (
-		err      error
-		affected int
-	)
-	if len(tu.hooks) == 0 {
-		if err = tu.check(); err != nil {
-			return 0, err
-		}
-		affected, err = tu.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*TodoMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = tu.check(); err != nil {
-				return 0, err
-			}
-			tu.mutation = mutation
-			affected, err = tu.sqlSave(ctx)
-			mutation.done = true
-			return affected, err
-		})
-		for i := len(tu.hooks) - 1; i >= 0; i-- {
-			if tu.hooks[i] == nil {
-				return 0, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = tu.hooks[i](mut)
-		}
-		if _, err := mut.Mutate(ctx, tu.mutation); err != nil {
-			return 0, err
-		}
-	}
-	return affected, err
+	return withHooks[int, TodoMutation](ctx, tu.sqlSave, tu.mutation, tu.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -210,16 +209,10 @@ func (tu *TodoUpdate) check() error {
 }
 
 func (tu *TodoUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   todo.Table,
-			Columns: todo.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeInt,
-				Column: todo.FieldID,
-			},
-		},
+	if err := tu.check(); err != nil {
+		return n, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(todo.Table, todo.Columns, sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt))
 	if ps := tu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -228,32 +221,16 @@ func (tu *TodoUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 	}
 	if value, ok := tu.mutation.Text(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: todo.FieldText,
-		})
+		_spec.SetField(todo.FieldText, field.TypeString, value)
 	}
 	if value, ok := tu.mutation.Status(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeEnum,
-			Value:  value,
-			Column: todo.FieldStatus,
-		})
+		_spec.SetField(todo.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := tu.mutation.Priority(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: todo.FieldPriority,
-		})
+		_spec.SetField(todo.FieldPriority, field.TypeInt, value)
 	}
 	if value, ok := tu.mutation.AddedPriority(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: todo.FieldPriority,
-		})
+		_spec.AddField(todo.FieldPriority, field.TypeInt, value)
 	}
 	if tu.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -263,10 +240,7 @@ func (tu *TodoUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{todo.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -279,10 +253,7 @@ func (tu *TodoUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{todo.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -298,10 +269,7 @@ func (tu *TodoUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{todo.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -317,10 +285,7 @@ func (tu *TodoUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{todo.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -333,10 +298,36 @@ func (tu *TodoUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{todo.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if tu.mutation.OwnerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   todo.OwnerTable,
+			Columns: []string{todo.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := tu.mutation.OwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   todo.OwnerTable,
+			Columns: []string{todo.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -352,6 +343,7 @@ func (tu *TodoUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
+	tu.mutation.done = true
 	return n, nil
 }
 
@@ -404,6 +396,26 @@ func (tuo *TodoUpdateOne) AddPriority(i int) *TodoUpdateOne {
 	return tuo
 }
 
+// SetOwnerID sets the "owner_id" field.
+func (tuo *TodoUpdateOne) SetOwnerID(i int) *TodoUpdateOne {
+	tuo.mutation.SetOwnerID(i)
+	return tuo
+}
+
+// SetNillableOwnerID sets the "owner_id" field if the given value is not nil.
+func (tuo *TodoUpdateOne) SetNillableOwnerID(i *int) *TodoUpdateOne {
+	if i != nil {
+		tuo.SetOwnerID(*i)
+	}
+	return tuo
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (tuo *TodoUpdateOne) ClearOwnerID() *TodoUpdateOne {
+	tuo.mutation.ClearOwnerID()
+	return tuo
+}
+
 // AddChildIDs adds the "children" edge to the Todo entity by IDs.
 func (tuo *TodoUpdateOne) AddChildIDs(ids ...int) *TodoUpdateOne {
 	tuo.mutation.AddChildIDs(ids...)
@@ -438,6 +450,11 @@ func (tuo *TodoUpdateOne) SetParent(t *Todo) *TodoUpdateOne {
 	return tuo.SetParentID(t.ID)
 }
 
+// SetOwner sets the "owner" edge to the User entity.
+func (tuo *TodoUpdateOne) SetOwner(u *User) *TodoUpdateOne {
+	return tuo.SetOwnerID(u.ID)
+}
+
 // Mutation returns the TodoMutation object of the builder.
 func (tuo *TodoUpdateOne) Mutation() *TodoMutation {
 	return tuo.mutation
@@ -470,6 +487,18 @@ func (tuo *TodoUpdateOne) ClearParent() *TodoUpdateOne {
 	return tuo
 }
 
+// ClearOwner clears the "owner" edge to the User entity.
+func (tuo *TodoUpdateOne) ClearOwner() *TodoUpdateOne {
+	tuo.mutation.ClearOwner()
+	return tuo
+}
+
+// Where appends a list predicates to the TodoUpdate builder.
+func (tuo *TodoUpdateOne) Where(ps ...predicate.Todo) *TodoUpdateOne {
+	tuo.mutation.Where(ps...)
+	return tuo
+}
+
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
 func (tuo *TodoUpdateOne) Select(field string, fields ...string) *TodoUpdateOne {
@@ -479,46 +508,7 @@ func (tuo *TodoUpdateOne) Select(field string, fields ...string) *TodoUpdateOne 
 
 // Save executes the query and returns the updated Todo entity.
 func (tuo *TodoUpdateOne) Save(ctx context.Context) (*Todo, error) {
-	var (
-		err  error
-		node *Todo
-	)
-	if len(tuo.hooks) == 0 {
-		if err = tuo.check(); err != nil {
-			return nil, err
-		}
-		node, err = tuo.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*TodoMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = tuo.check(); err != nil {
-				return nil, err
-			}
-			tuo.mutation = mutation
-			node, err = tuo.sqlSave(ctx)
-			mutation.done = true
-			return node, err
-		})
-		for i := len(tuo.hooks) - 1; i >= 0; i-- {
-			if tuo.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = tuo.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, tuo.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*Todo)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from TodoMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks[*Todo, TodoMutation](ctx, tuo.sqlSave, tuo.mutation, tuo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -559,16 +549,10 @@ func (tuo *TodoUpdateOne) check() error {
 }
 
 func (tuo *TodoUpdateOne) sqlSave(ctx context.Context) (_node *Todo, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   todo.Table,
-			Columns: todo.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeInt,
-				Column: todo.FieldID,
-			},
-		},
+	if err := tuo.check(); err != nil {
+		return _node, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(todo.Table, todo.Columns, sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt))
 	id, ok := tuo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Todo.id" for update`)}
@@ -594,32 +578,16 @@ func (tuo *TodoUpdateOne) sqlSave(ctx context.Context) (_node *Todo, err error) 
 		}
 	}
 	if value, ok := tuo.mutation.Text(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: todo.FieldText,
-		})
+		_spec.SetField(todo.FieldText, field.TypeString, value)
 	}
 	if value, ok := tuo.mutation.Status(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeEnum,
-			Value:  value,
-			Column: todo.FieldStatus,
-		})
+		_spec.SetField(todo.FieldStatus, field.TypeEnum, value)
 	}
 	if value, ok := tuo.mutation.Priority(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: todo.FieldPriority,
-		})
+		_spec.SetField(todo.FieldPriority, field.TypeInt, value)
 	}
 	if value, ok := tuo.mutation.AddedPriority(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: todo.FieldPriority,
-		})
+		_spec.AddField(todo.FieldPriority, field.TypeInt, value)
 	}
 	if tuo.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -629,10 +597,7 @@ func (tuo *TodoUpdateOne) sqlSave(ctx context.Context) (_node *Todo, err error) 
 			Columns: []string{todo.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -645,10 +610,7 @@ func (tuo *TodoUpdateOne) sqlSave(ctx context.Context) (_node *Todo, err error) 
 			Columns: []string{todo.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -664,10 +626,7 @@ func (tuo *TodoUpdateOne) sqlSave(ctx context.Context) (_node *Todo, err error) 
 			Columns: []string{todo.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -683,10 +642,7 @@ func (tuo *TodoUpdateOne) sqlSave(ctx context.Context) (_node *Todo, err error) 
 			Columns: []string{todo.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -699,10 +655,36 @@ func (tuo *TodoUpdateOne) sqlSave(ctx context.Context) (_node *Todo, err error) 
 			Columns: []string{todo.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeInt,
-					Column: todo.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(todo.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if tuo.mutation.OwnerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   todo.OwnerTable,
+			Columns: []string{todo.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := tuo.mutation.OwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   todo.OwnerTable,
+			Columns: []string{todo.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -721,5 +703,6 @@ func (tuo *TodoUpdateOne) sqlSave(ctx context.Context) (_node *Todo, err error) 
 		}
 		return nil, err
 	}
+	tuo.mutation.done = true
 	return _node, nil
 }

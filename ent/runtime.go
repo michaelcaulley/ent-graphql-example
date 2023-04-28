@@ -6,6 +6,7 @@ import (
 	"time"
 	"todo/ent/schema"
 	"todo/ent/todo"
+	"todo/ent/user"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -26,4 +27,10 @@ func init() {
 	todoDescPriority := todoFields[3].Descriptor()
 	// todo.DefaultPriority holds the default value on creation for the priority field.
 	todo.DefaultPriority = todoDescPriority.Default.(int)
+	userFields := schema.User{}.Fields()
+	_ = userFields
+	// userDescName is the schema descriptor for name field.
+	userDescName := userFields[0].Descriptor()
+	// user.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	user.NameValidator = userDescName.Validators[0].(func(string) error)
 }
